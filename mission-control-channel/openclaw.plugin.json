@@ -1,0 +1,27 @@
+{
+  "id": "mission-control",
+  "kind": "agent",
+  "name": "Mission Control",
+  "description": "Mission Control channel plugin for OpenClaw — MC as a native channel",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mcUrl": {
+        "type": "string",
+        "description": "Mission Control base URL, e.g. http://100.78.2.112:18793"
+      },
+      "apiKey": {
+        "type": "string",
+        "description": "Mission Control API key"
+      },
+      "webhookPath": {
+        "type": "string",
+        "description": "Webhook path for MC to post events (default: /mc/webhook)"
+      }
+    }
+  },
+  "version": "0.1.0",
+  "sdk": "openclaw",
+  "status": "enabled"
+}

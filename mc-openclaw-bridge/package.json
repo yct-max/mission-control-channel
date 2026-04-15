@@ -1,0 +1,19 @@
+{
+  "name": "mc-openclaw-bridge",
+  "version": "0.1.0",
+  "description": "MC → OpenClaw webhook ingress. Receives MC task events and delivers them to OpenClaw agent sessions.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
