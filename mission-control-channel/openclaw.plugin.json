@@ -2,18 +2,19 @@
   "id": "mission-control",
   "kind": "agent",
   "name": "Mission Control",
-  "description": "Mission Control channel plugin for OpenClaw — MC as a native channel",
+  "description": "Mission Control channel plugin for OpenClaw — MC as a native channel. Requires agentToken — create an integration via POST /api/agent-integrations in Mission Control.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
+    "required": ["mcUrl", "agentToken"],
     "properties": {
       "mcUrl": {
         "type": "string",
         "description": "Mission Control base URL, e.g. http://100.78.2.112:18793"
       },
-      "apiKey": {
+      "agentToken": {
         "type": "string",
-        "description": "Mission Control API key"
+        "description": "Agent integration token from Mission Control (mc_xxx...). Create via: curl -X POST MC_URL/api/agent-integrations -d '{\"agent_name\":\"alex\"}'"
       },
       "webhookPath": {
         "type": "string",
@@ -21,7 +22,7 @@
       }
     }
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "sdk": "openclaw",
   "status": "enabled"
 }

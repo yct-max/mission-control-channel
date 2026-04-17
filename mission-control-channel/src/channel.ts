@@ -22,7 +22,7 @@ import { DEFAULT_ROUTING } from "./types.js";
 export interface McChannelAccount {
   accountId: string;
   mcUrl: string;
-  apiKey: string;
+  agentToken: string;
   webhookPath: string;
   routing: AgentRoutingTable;
 }
@@ -36,13 +36,13 @@ export function resolveMcAccount(cfg: OpenClawConfig, accountId?: string | null)
   )?.entries as Record<string, Record<string, unknown>> | undefined;
   const pluginCfg = section?.["mission-control"] as Record<string, unknown> | undefined;
   const config = pluginCfg?.config as Record<string, unknown> | undefined;
-  if (!config?.mcUrl || !config.apiKey) {
-    throw new Error("mission-control: mcUrl and apiKey are required in plugins.entries.mission-control.config");
+  if (!config?.mcUrl || !config.agentToken) {
+    throw new Error("mission-control: mcUrl and agentToken are required in plugins.entries.mission-control.config");
   }
   return {
     accountId: (accountId ?? "default") as string,
     mcUrl: config.mcUrl as string,
-    apiKey: config.apiKey as string,
+    agentToken: config.agentToken as string,
     webhookPath: (config.webhookPath as string | undefined) ?? "/mc/webhook",
     routing: {
       ...DEFAULT_ROUTING,
@@ -69,9 +69,9 @@ export const missionControlPlugin = createChatChannelPlugin({
         const pluginCfg = section?.["mission-control"] as Record<string, unknown> | undefined;
         const config = pluginCfg?.config as Record<string, unknown> | undefined;
         return {
-          enabled: Boolean(config?.mcUrl && config.apiKey),
-          configured: Boolean(config?.mcUrl && config.apiKey),
-          tokenStatus: config?.apiKey ? "available" : "missing",
+          enabled: Boolean(config?.mcUrl && config.agentToken),
+          configured: Boolean(config?.mcUrl && config.agentToken),
+          tokenStatus: config?.agentToken ? "available" : "missing",
         };
       }) as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,7 +116,7 @@ export const missionControlPlugin = createChatChannelPlugin({
           : String(to);
         if (!taskId) throw new Error("mission-control: missing task_id in target");
 
-        const mc = createMcClient({ baseUrl: account.mcUrl, apiKey: account.apiKey });
+        const mc = createMcClient({ baseUrl: account.mcUrl, agentToken: account.agentToken });
         const comment = await mc.addComment(taskId, text);
         return { messageId: String(comment.id), chatId: taskId };
       },

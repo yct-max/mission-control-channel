@@ -13,9 +13,9 @@ mc-openclaw-bridge/        — Standalone bridge for MC → OpenClaw event deliv
 
 Makes Mission Control a **native OpenClaw channel**. MC task events arrive as OpenClaw messages; agent replies go back to MC as task comments.
 
-**Status:** Plugin LOADED in OpenClaw 2026.3.31, but HTTP webhook route registration has a bug.
+Each agent authenticates with its own **agent integration token** (create via `POST /api/agent-integrations` in MC).
 
-See `mission-control-channel/README.md` for full docs.
+See `mission-control-channel/README.md` for full setup docs.
 
 ### mc-openclaw-bridge (Legacy Bridge)
 
@@ -31,22 +31,30 @@ npm install
 npm run build
 ```
 
-Then configure in OpenClaw gateway config:
+Create an agent integration in MC:
+```bash
+curl -X POST "http://100.78.2.112:18793/api/agent-integrations" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_name": "alex"}'
+# Save the returned token!
+```
+
+Then configure in OpenClaw gateway config (per agent):
 
 ```json
 {
   "channels": {
-    "mission-control": {
-      "mcUrl": "http://100.78.2.112:18793",
-      "routing": {
-        "alex": { "assignee": "alex", "sessionKey": "agent:alex:main" },
-        "monica": { "assignee": "monica", "sessionKey": "agent:monica:main" },
-        "quinn": { "assignee": "quinn", "sessionKey": "agent:quinn:main" }
-      }
-    }
+    "mission-control": { "enabled": true }
   },
   "plugins": {
-    "entries": { "mission-control": { "enabled": true } },
+    "entries": {
+      "mission-control": {
+        "config": {
+          "mcUrl": "http://100.78.2.112:18793",
+          "agentToken": "mc_<token from MC>"
+        }
+      }
+    },
     "load": { "paths": ["/path/to/mission-control-channel"] }
   }
 }

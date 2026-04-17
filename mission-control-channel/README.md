@@ -2,7 +2,20 @@
 
 Makes Mission Control a first-class OpenClaw channel. MC task events arrive as native OpenClaw messages; agent replies go back to MC as task comments.
 
-## Quick Install
+## Architecture
+
+```
+Agent → OpenClaw Gateway → MC Channel Plugin → MC API (POST /api/tasks/:id/comments)
+                                                              ↑
+                                                    Bearer <agentToken>
+MC → Webhook (/mc/webhook) → Gateway → Agent Session (by task assignee)
+```
+
+Each agent has its own **agent integration token** registered in MC. Tokens identify which agent is connecting and enable MC to route events to the correct agent session.
+
+## Setup
+
+### 1. Build the plugin
 
 ```bash
 cd mission-control-channel
@@ -10,185 +23,157 @@ npm install
 npm run build
 ```
 
-## Gateway Config
+### 2. Create an agent integration in MC
 
-Add to `~/.openclaw/openclaw.json`:
+On the Mac mini (or wherever MC is running), create an integration for each agent:
+
+```bash
+# Replace with your MC URL and agent name
+MC_URL="http://100.78.2.112:18793"
+AGENT_NAME="alex"  # alex, monica, quinn, etc.
+
+# Create integration — save the returned token
+curl -X POST "${MC_URL}/api/agent-integrations" \
+  -H "Content-Type: application/json" \
+  -d "{\"agent_name\": \"${AGENT_NAME}\"}"
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "agent_name": "alex",
+  "token": "mc_a1b2c3d4e5f6...",
+  "created_at": "2026-04-16T22:00:00Z"
+}
+```
+
+**⚠️ The token is shown only once.** Store it in the agent's OpenClaw config immediately.
+
+### 3. Configure the plugin in OpenClaw
+
+Add to `~/.openclaw/openclaw.json` **per agent** (each agent has its own token):
 
 ```json
 {
   "channels": {
     "mission-control": {
-      "mcUrl": "http://100.78.2.112:18793",
-      "apiKey": "<your MC API key>",
-      "webhookPath": "/mc/webhook",
-      "routing": {
-        "alex": { "assignee": "alex", "sessionKey": "agent:alex:main", "displayName": "Agent Alex" },
-        "monica": { "assignee": "monica", "sessionKey": "agent:monica:main", "displayName": "Agent Monica" },
-        "quinn": { "assignee": "quinn", "sessionKey": "agent:quinn:main", "displayName": "Agent Quinn" }
-      }
+      "enabled": true
     }
   },
   "plugins": {
     "entries": {
       "mission-control": {
-        "enabled": true
+        "config": {
+          "mcUrl": "http://100.78.2.112:18793",
+          "agentToken": "mc_a1b2c3d4e5f6..."
+        }
       }
     },
     "load": {
       "paths": [
-        "/path/to/mission-control-channel"
+        "/home/petersky/repos/mission-control-channel/mission-control-channel"
       ]
     }
   }
 }
 ```
 
-Then restart the gateway: `openclaw gateway restart`
-
-## Container Test Harness
-
-For a clean isolated test on the Mac mini:
-
-**1. Build the plugin (on host):**
+Then restart:
 ```bash
-cd /Users/petersky/.openclaw/workspace-alex/mission-control-channel
-npm install && npm run build
+openclaw gateway restart
 ```
 
-**2. Start a clean OpenClaw container:**
+### 4. Configure MC webhook (so MC sends events to the gateway)
+
+In MC's `app/config.py`, set the webhook URL to point to the OpenClaw gateway. The gateway must be reachable from the Mac mini.
+
+Example (gateway on same host, port 18789):
+```python
+# In app/config.py or environment
+MC_WEBHOOK_URL = "http://localhost:18789/mc/webhook"
+```
+
+Or if MC is on a different host than the gateway, point to the gateway's address:
+```
+http://<gateway-host>:<port>/mc/webhook
+```
+
+## Per-Agent Token Management
+
+Tokens are managed via the MC API:
+
 ```bash
-cd /Users/petersky/openclaw  # wherever the openclaw repo is
-OPENCLAW_WORKSPACE_DIR=/Users/petersky/.openclaw/workspace-alex \
-OPENCLAW_EXTRA_MOUNTS=/Users/petersky/.openclaw/workspace-alex/mission-control-channel:/home/node/.openclaw/plugins/mission-control \
-./scripts/docker/setup.sh
+MC_URL="http://100.78.2.112:18793"
+
+# List all integrations
+curl "${MC_URL}/api/agent-integrations"
+
+# Revoke an integration
+curl -X DELETE "${MC_URL}/api/agent-integrations/alex"
 ```
 
-Or with Docker Compose, add to your compose file:
-```yaml
-services:
-  openclaw-gateway:
-    volumes:
-      - /Users/petersky/.openclaw/workspace-alex/mission-control-channel:/home/node/.openclaw/plugins/mission-control
-```
+When an agent's token is revoked and re-created, update the agent's `agentToken` in the OpenClaw config and restart the gateway.
 
-**3. Configure inside the container:**
-```bash
-docker compose exec openclaw-gateway node dist/index.js config set channels.mission-control.mcUrl "http://100.78.2.112:18793"
-docker compose exec openclaw-gateway node dist/index.js config set channels.mission-control.apiKey "<key>"
-docker compose exec openclaw-gateway node dist/index.js config set plugins.entries.mission-control.enabled true
-docker compose exec openclaw-gateway node dist/index.js config set plugins.load.paths '["/home/node/.openclaw/plugins/mission-control"]'
-```
+## Event Flow
 
-**4. Restart the gateway:**
-```bash
-docker compose restart openclaw-gateway
-```
+### Inbound (MC → Agent)
 
-**5. Verify the channel registered:**
-```bash
-docker compose exec openclaw-gateway node dist/index.js status
-```
-
-**6. Test the webhook endpoint:**
-```bash
-curl -X POST http://localhost:18789/mc/webhook \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_type": "task.assigned",
-    "task_id": "test-123",
-    "actor": "Max",
-    "timestamp": "2026-03-31T00:00:00Z",
-    "task": {
-      "id": "test-123",
-      "title": "[test] Container test task",
-      "status": "in_progress",
-      "assignee": "alex",
-      "priority": "high",
-      "description": "Testing the MC channel plugin in a container",
-      "tags": ["test"]
-    }
-  }'
-```
-
-Expected: `{"ok": true}` — agent alex's session receives the task context.
-
-## MC Webhook Config
-
-Configure MC to POST task events to the gateway:
-
-```
-POST http://<gateway-host>:<port>/mc/webhook
-Content-Type: application/json
-
-{
-  "event_type": "task.assigned",
-  "task_id": "<task-uuid>",
-  "actor": "Max",
-  "timestamp": "2026-03-31T00:00:00Z",
-  "task": {
-    "id": "<task-uuid>",
-    "title": "Task title",
-    "status": "in_progress",
-    "assignee": "alex",
-    "priority": "high",
-    "description": "...",
-    "tags": []
-  }
-}
-```
-
-## Event Types
+MC POSTs task events to `/mc/webhook`. The plugin uses `task.assignee` to route to the correct agent session:
 
 | event_type | Trigger | Action |
 |---|---|---|
 | `task.assigned` | Task assigned | Wake assignee, inject task context |
-| `task.unblocked` | Blocked → in_progress | Wake assignee, inject unblock |
-| `task.review_requested` | Status → ready_for_review | Wake reviewer |
-| `task.blocked` | Status → blocked | Wake assignee, inject blocker |
-| `task.mention` | Comment mentions @agent | Wake mentioned agent |
-| `task.created` | New task assigned | Wake assignee |
+| `task.updated` | Task updated | Wake assignee with update |
+| `task.completed` | Task completed | Notify assignee |
+| `task.comment` | New comment | Forward comment to assignee |
 
-Write-back events (`task.comment`, `task.status_changed`, `task.progress_updated`) are skipped if the actor matches the target assignee — no echo loops.
+Echo loop prevention: events with `actor` matching known agents are skipped.
 
-## Agent Usage
+### Outbound (Agent → MC)
 
-Reply to a task from any OpenClaw session:
-
+Agent sends from any session:
 ```
 /message channel=mission-control to=task:<task_id> text=Here's my update...
 ```
 
-The plugin posts the message as a comment on the MC task.
+The plugin posts to `POST /api/tasks/:id/comments` with `Authorization: Bearer <agentToken>`.
+
+## Troubleshooting
+
+**Plugin not loading:**
+```bash
+openclaw gateway status
+# Check plugins.load.paths includes the plugin directory
+```
+
+**Webhook returning 500:**
+- Check gateway logs: `openclaw logs` or `docker compose logs`
+- Verify `mcUrl` is reachable from the gateway
+- Confirm `agentToken` is correct (no trailing spaces)
+
+**Agent not receiving events:**
+- Verify the integration exists in MC: `curl ${MC_URL}/api/agent-integrations`
+- Confirm `last_seen_at` updates when the agent makes requests
+- Check the task's `assignee` matches the agent's `agent_name` in MC
+
+**Token issues:**
+- Tokens use HMAC-SHA256 — no external dependencies
+- A new secret is generated on first run if `MC_TOKEN_SECRET` env var is not set
+- To rotate the secret: set `MC_TOKEN_SECRET=<new-hex>` and restart MC (existing tokens will be invalid)
 
 ## File Structure
 
 ```
 mission-control-channel/
-├── package.json           # openclaw.channel manifest + npm config
-├── openclaw.plugin.json   # Plugin manifest (id, kind, configSchema)
+├── package.json
+├── openclaw.plugin.json   # Plugin manifest (id, kind, configSchema, version)
 ├── tsconfig.json
-├── .gitignore
 ├── README.md
-├── setup-entry.ts        # Setup-only entry (for disabled/setup mode)
+├── setup-entry.ts        # Setup-only entry (disabled/setup mode)
 └── src/
-    ├── index.ts           # Full entry: defineChannelPluginEntry + registerHttpRoute
-    ├── channel.ts         # createChatChannelPlugin with MC-specific adapters
-    ├── client.ts          # MC REST API client (addComment, getTask, updateStatus)
-    └── types.ts           # Shared types (McTaskEvent, AgentRoutingTable)
+    ├── index.ts           # definePluginEntry + HTTP webhook handler
+    ├── channel.ts         # createChatChannelPlugin + MC client integration
+    ├── client.ts          # MC REST API client (authenticated)
+    └── types.ts           # Shared types
 ```
-
-## Troubleshooting
-
-**Plugin not loading:**
-- Check `openclaw gateway status` for plugin load errors
-- Verify `plugins.load.paths` includes the plugin directory
-- Check the plugin directory has `openclaw.plugin.json`
-
-**Webhook 500 error:**
-- Check gateway logs: `docker compose logs openclaw-gateway | grep mission-control`
-- Verify `channels.mission-control.mcUrl` is reachable from inside the container
-- Ensure `plugins.entries.mission-control.enabled` is `true`
-
-**Channel not registering:**
-- Channel plugin needs to be allowlisted if `plugins.allow` is set
-- Add `"mission-control"` to `plugins.allow`

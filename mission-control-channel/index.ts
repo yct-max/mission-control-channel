@@ -53,19 +53,22 @@ export default definePluginEntry({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cfg = (api.pluginConfig ?? {}) as {
       mcUrl?: string;
-      apiKey?: string;
+      agentToken?: string;
       webhookPath?: string;
     };
     const mcUrl = cfg?.mcUrl;
-    const apiKey = cfg?.apiKey;
+    const agentToken = cfg?.agentToken;
     const webhookPath = cfg?.webhookPath ?? "/mc/webhook";
 
-    if (!mcUrl || !apiKey) {
+    if (!mcUrl || !agentToken) {
       api.logger?.warn(
-        "[mission-control] Missing mcUrl or apiKey in plugin config — webhook handler will not be available"
+        "[mission-control] Missing mcUrl or agentToken in plugin config — webhook handler will not be available"
       );
       return;
     }
+
+    // Build auth header for MC API calls
+    const authHeader = `Bearer ${agentToken}`;
 
     api.registerHttpRoute({
       path: webhookPath,

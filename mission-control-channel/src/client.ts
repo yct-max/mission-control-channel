@@ -2,13 +2,13 @@ import type { McClient, McTask } from "./types.js";
 
 export interface McClientConfig {
   baseUrl: string;
-  apiKey: string;
+  agentToken: string;
 }
 
 export function createMcClient(config: McClientConfig): McClient {
   const headers = {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${config.apiKey}`,
+    "Authorization": `Bearer ${config.agentToken}`,
   };
 
   async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
