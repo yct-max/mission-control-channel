@@ -45,12 +45,13 @@ export interface AgentRoutingEntry {
   assignee: string;
   sessionKey: string;
   displayName: string;
+  token: string;
 }
 
 export type AgentRoutingTable = Record<string, AgentRoutingEntry>;
 
 export const DEFAULT_ROUTING: AgentRoutingTable = {
-  alex: { assignee: "alex", sessionKey: "agent:alex:main", displayName: "Agent Alex" },
-  monica: { assignee: "monica", sessionKey: "agent:monica:main", displayName: "Agent Monica" },
-  quinn: { assignee: "quinn", sessionKey: "agent:quinn:main", displayName: "Agent Quinn" },
+  alex: { assignee: "alex", sessionKey: "agent:alex:main", displayName: "Agent Alex", token: "" },
+  monica: { assignee: "monica", sessionKey: "agent:monica:main", displayName: "Agent Monica", token: "" },
+  quinn: { assignee: "quinn", sessionKey: "agent:quinn:main", displayName: "Agent Quinn", token: "" },
 };

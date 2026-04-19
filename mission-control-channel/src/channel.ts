@@ -36,18 +36,44 @@ export function resolveMcAccount(cfg: OpenClawConfig, accountId?: string | null)
   )?.entries as Record<string, Record<string, unknown>> | undefined;
   const pluginCfg = section?.["mission-control"] as Record<string, unknown> | undefined;
   const config = pluginCfg?.config as Record<string, unknown> | undefined;
-  if (!config?.mcUrl || !config.agentToken) {
-    throw new Error("mission-control: mcUrl and agentToken are required in plugins.entries.mission-control.config");
+  if (!config?.mcUrl) {
+    throw new Error("mission-control: mcUrl is required in plugins.entries.mission-control.config");
   }
+
+  // Support legacy single agentToken + new per-agent agents{} map
+  const legacyToken = (config.agentToken as string | undefined) ?? "";
+  const agentsConfig = (config.agents as Record<string, { token?: string }> | undefined) ?? {};
+
+  // Build routing table with per-agent tokens merged in
+  const routing: AgentRoutingTable = { ...DEFAULT_ROUTING };
+  for (const [name, agentCfg] of Object.entries(agentsConfig)) {
+    if (routing[name] && agentCfg?.token) {
+      routing[name] = { ...routing[name], token: agentCfg.token };
+    }
+  }
+
+  // If no per-agent config, use legacy single token for all agents
+  if (Object.keys(agentsConfig).length === 0 && legacyToken) {
+    for (const entry of Object.values(routing)) {
+      entry.token = legacyToken;
+    }
+  }
+
+  const resolvedAccountId = (accountId ?? "default") as string;
+  // Look up token for this accountId (agent name)
+  const routingEntry = routing[resolvedAccountId];
+  const agentToken = routingEntry?.token ?? legacyToken;
+
+  if (!agentToken) {
+    throw new Error(`mission-control: no token found for agent '${resolvedAccountId}' — set agents.${resolvedAccountId}.token or agentToken in plugin config`);
+  }
+
   return {
-    accountId: (accountId ?? "default") as string,
+    accountId: resolvedAccountId,
     mcUrl: config.mcUrl as string,
-    agentToken: config.agentToken as string,
+    agentToken,
     webhookPath: (config.webhookPath as string | undefined) ?? "/mc/webhook",
-    routing: {
-      ...DEFAULT_ROUTING,
-      ...((config.routing as Record<string, unknown>) ?? {}),
-    } as AgentRoutingTable,
+    routing,
   };
 }
 
@@ -109,8 +135,14 @@ export const missionControlPlugin = createChatChannelPlugin({
     attachedResults: {
       channel: "mission-control",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      async sendText({ cfg, to, text, accountId }: any) {
-        const account = resolveMcAccount(cfg, accountId ?? null);
+      async sendText({ cfg, to, text, accountId, sessionKey }: any) {
+        // Extract agent name from sessionKey (format: "agent:<name>:main")
+        const agentName = (sessionKey ?? accountId ?? "default")
+          .toString()
+          .split(":")[1]
+          ?? accountId
+          ?? "default";
+        const account = resolveMcAccount(cfg, agentName);
         const taskId = String(to)?.startsWith("task:")
           ? String(to).slice(5)
           : String(to);
