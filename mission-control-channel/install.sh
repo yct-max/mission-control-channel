@@ -5,7 +5,7 @@
 #   curl -LsSf https://github.com/yct-max/mission-control-channel/releases/latest/download/install.sh | sh -s -- --version 0.2.0
 #   curl -LsSf https://github.com/yct-max/mission-control-channel/releases/latest/download/install.sh | sh -s -- --mc-url http://100.78.2.112:18793 --agent-token mc_xxx --restart
 #
-set -euo pipefail
+(set -o pipefail 2>/dev/null) || true; set -eu
 
 REPO="yct-max/mission-control-channel"
 INSTALL_DIR="$HOME/.openclaw/plugins/mission-control"
@@ -117,7 +117,7 @@ patch_openclaw_config() {
   local agent_token=${2:-}
   local gateway_port=${3:-}
 
-  if [[ ! -f "$OPENCLAW_CONFIG" ]]; then
+  if [ ! -f "$OPENCLAW_CONFIG" ]; then
     warn "OpenClaw config not found at ${OPENCLAW_CONFIG} — skipping config patch"
     return 0
   fi
@@ -182,7 +182,7 @@ PYEOF
 
 restart_gateway() {
   local port=${1:-}
-  if [[ -z "$port" ]]; then
+  if [ -z "$port" ]; then
     port=$(python3 -c "import json; cfg=json.load(open('$OPENCLAW_CONFIG')); print(cfg.get('gateway',{}).get('port','18789'))" 2>/dev/null || echo "18789")
   fi
   info "Restarting OpenClaw gateway on port ${port}..."
@@ -234,7 +234,7 @@ main() {
   arch=$(detect_arch)
 
   # Parse args
-  while [[ $# -gt 0 ]]; do
+  while [ $# -gt 0 ]; do
     case "$1" in
       --version)       version="$2"; shift 2;;
       --install-dir)   install_dir="$2"; shift 2;;
@@ -252,16 +252,16 @@ main() {
   done
 
   # Resolve version
-  if [[ -z "$version" ]]; then
+  if [ -z "$version" ]; then
     version=$(latest_version)
-    [[ -z "$version" ]] && error "Could not determine latest version"
+    [ -z "$version" ] && error "Could not determine latest version"
   fi
   info "Installing mission-control plugin v${version} (${platform}/${arch})"
 
   # Pre-install check
-  if [[ -d "$install_dir" ]] && [[ "$do_update" == "false" ]] && [[ "$do_yes" == "false" ]]; then
+  if [ -d "$install_dir" ] && [ "$do_update" = "false" ] && [ "$do_yes" = "false" ]; then
     read -p "[mission-control] $install_dir already exists. Update? [y/N] " ans < /dev/tty || ans="N"
-    [[ "${ans:-N}" =~ ^[Yy]$ ]] || { info "Aborted"; exit 0; }
+    case "${ans:-N}" in [Yy]*) ;; *) { info "Aborted"; exit 0; };; esac
   fi
 
   TMPDIR=$(mktemp -d)
@@ -275,18 +275,18 @@ main() {
   extract "$archive" "$install_dir"
 
   # Config patch
-  if [[ "$do_config" == "true" ]]; then
+  if [ "$do_config" = "true" ]; then
     MC_URL="$mc_url" AGENT_TOKEN="$agent_token" GATEWAY_PORT="$gateway_port" \
       patch_openclaw_config "$mc_url" "$agent_token" "$gateway_port"
   fi
 
   # Restart
-  if [[ "$do_restart" == "true" ]]; then
+  if [ "$do_restart" = "true" ]; then
     restart_gateway "$gateway_port"
   fi
 
   info "Done! Installed mission-control ${version} to ${install_dir}"
-  [[ "$do_restart" == "false" ]] && info "Run with --restart to restart the gateway"
+  [ "$do_restart" = "false" ] && info "Run with --restart to restart the gateway"
 }
 
 main "$@"
