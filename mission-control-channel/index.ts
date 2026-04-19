@@ -10,6 +10,7 @@
  * Outbound: agent message → MC channel → mc.addComment()
  */
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
+import type { IncomingMessage } from "http";
 import { missionControlPlugin } from "./src/channel.js";
 import { DEFAULT_ROUTING } from "./src/types.js";
 
@@ -70,6 +71,16 @@ export default definePluginEntry({
     // Build auth header for MC API calls
     const authHeader = `Bearer ${agentToken}`;
 
+    // Read raw body from Node.js HTTP request
+    function readBody(req: IncomingMessage): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        req.on("data", (chunk: Buffer) => chunks.push(chunk));
+        req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        req.on("error", reject);
+      });
+    }
+
     api.registerHttpRoute({
       path: webhookPath,
       auth: "plugin",
@@ -81,11 +92,19 @@ export default definePluginEntry({
           return true;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const reqBody = (req as any).body;
+        let rawBody: string;
+        try {
+          rawBody = await readBody(req as unknown as IncomingMessage);
+        } catch {
+          res.statusCode = 400;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Could not read request body" }));
+          return true;
+        }
+
         let body: unknown;
         try {
-          body = JSON.parse(reqBody ?? "{}");
+          body = JSON.parse(rawBody || "{}");
         } catch {
           res.statusCode = 400;
           res.setHeader("Content-Type", "application/json");

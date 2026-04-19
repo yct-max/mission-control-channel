@@ -10,10 +10,7 @@
     "prepack": "tsc"
   },
   "openclaw": {
-    "channel": {
-      "id": "mission-control",
-      "label": "Mission Control"
-    }
+    "extensions": ["./dist/index.js"]
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
