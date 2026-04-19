@@ -1,6 +1,6 @@
 {
   "name": "@yct-max/openclaw-mission-control",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mission Control channel plugin for OpenClaw — MC as a native channel",
   "type": "module",
   "main": "dist/index.js",
@@ -10,7 +10,9 @@
     "prepack": "tsc"
   },
   "openclaw": {
-    "extensions": ["./dist/index.js"]
+    "extensions": [
+      "./dist/index.js"
+    ]
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

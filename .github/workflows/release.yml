@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: Release v${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_short=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Read package version
+        id: package
+        run: |
+          PKG_VERSION=$(node -p "require('./mission-control-channel/package.json').version")
+          echo "version=$PKG_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Verify version match
+        run: |
+          if [[ "${{ steps.version.outputs.version }}" != "${{ steps.package.outputs.version }}" ]]; then
+            echo "ERROR: Tag version ${{ steps.version.outputs.version }} != package.json version ${{ steps.package.outputs.version }}"
+            echo "Please update package.json before tagging."
+            exit 1
+          fi
+          echo "Versions aligned: ${{ steps.version.outputs.version }}"
+
+      - name: Build TypeScript
+        run: |
+          cd mission-control-channel
+          npm ci
+          npm run build
+
+      - name: Package archives
+        run: |
+          # Linux x64
+          tar --exclude='.git' --exclude='node_modules/.cache' \
+              -czf mission-control-linux-x64.tar.gz mission-control-channel/
+
+          # macOS x64
+          tar --exclude='.git' --exclude='node_modules/.cache' \
+              -czf mission-control-darwin-x64.tar.gz mission-control-channel/
+
+          # macOS ARM64
+          tar --exclude='.git' --exclude='node_modules/.cache' \
+              -czf mission-control-darwin-arm64.tar.gz mission-control-channel/
+
+          ls -lh *.tar.gz
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            install.sh
+            mission-control-linux-x64.tar.gz
+            mission-control-darwin-x64.tar.gz
+            mission-control-darwin-arm64.tar.gz
+          body: |
+            ## Installation
+
+            ```bash
+            # Install latest
+            curl -LsSf https://github.com/yct-max/mission-control-channel/releases/latest/download/install.sh | sh
+
+            # Install + configure + restart
+            curl -LsSf https://github.com/yct-max/mission-control-channel/releases/latest/download/install.sh | sh -s -- \
+              --mc-url http://100.78.2.112:18793 \
+              --agent-token mc_your_token_here \
+              --restart
+            ```
+
+            ## Updating
+
+            ```bash
+            curl -LsSf https://github.com/yct-max/mission-control-channel/releases/latest/download/install.sh | sh -s -- --update --restart
+            ```
+
+            See [README](https://github.com/yct-max/mission-control-channel#readme) for full documentation.
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
