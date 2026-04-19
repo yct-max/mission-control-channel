@@ -46,15 +46,15 @@ jobs:
       - name: Package archives
         run: |
           # Linux x64
-          tar --exclude='.git' --exclude='node_modules/.cache' \
+          tar --exclude='.git' --exclude='mission-control-channel/node_modules' \
               -czf mission-control-linux-x64.tar.gz mission-control-channel/
 
           # macOS x64
-          tar --exclude='.git' --exclude='node_modules/.cache' \
+          tar --exclude='.git' --exclude='mission-control-channel/node_modules' \
               -czf mission-control-darwin-x64.tar.gz mission-control-channel/
 
           # macOS ARM64
-          tar --exclude='.git' --exclude='node_modules/.cache' \
+          tar --exclude='.git' --exclude='mission-control-channel/node_modules' \
               -czf mission-control-darwin-arm64.tar.gz mission-control-channel/
 
           ls -lh *.tar.gz
