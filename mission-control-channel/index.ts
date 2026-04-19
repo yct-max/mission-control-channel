@@ -24,8 +24,14 @@ function buildEventPrompt(event: {
   switch (event.event_type) {
     case "task.assigned":
       return `[Mission Control] Task assigned to ${task.assignee}: "${task.title}" (${task.status})\nPriority: ${task.priority ?? "none"}\nDescription: ${task.description ?? "(none)"}\n\nPlease acknowledge and begin work.`;
-    case "task.updated":
-      return `[Mission Control] Task updated: "${event.task.title}" — now ${event.task.status}`;
+    case "task.updated": {
+      const changes = event.task?.changes ?? {};
+      const changedFields = Object.keys(changes);
+      if (changedFields.length > 0) {
+        return `[Mission Control] Task updated: "${task.title}" — changed: ${changedFields.join(", ")}`;
+      }
+      return `[Mission Control] Task updated: "${task.title}" — now ${task.status}`;
+    }
     case "task.completed":
       return `[Mission Control] Task completed: "${event.task.title}"`;
     case "task.comment":
