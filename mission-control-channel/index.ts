@@ -11,7 +11,7 @@
  */
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
 import type { IncomingMessage } from "http";
-import { missionControlPlugin } from "./src/channel.js";
+import { missionControlPlugin, registerPluginWithMc } from "./src/channel.js";
 import { DEFAULT_ROUTING } from "./src/types.js";
 
 // ─── Inbound event handler ───────────────────────────────────────────────────
@@ -60,21 +60,25 @@ export default definePluginEntry({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cfg = (api.pluginConfig ?? {}) as {
       mcUrl?: string;
+      gatewayUrl?: string;
       agentToken?: string;
+      agents?: Record<string, { token?: string }>;
       webhookPath?: string;
     };
     const mcUrl = cfg?.mcUrl;
+    const gatewayUrl = cfg?.gatewayUrl;
     const agentToken = cfg?.agentToken;
+    const agents = cfg?.agents ?? {};
     const webhookPath = cfg?.webhookPath ?? "/mc/webhook";
 
-    if (!mcUrl || !agentToken) {
+    if (!mcUrl || (!agentToken && Object.keys(agents).length === 0)) {
       api.logger?.warn(
-        "[mission-control] Missing mcUrl or agentToken in plugin config — webhook handler will not be available"
+        "[mission-control] Missing mcUrl or agentToken/agents in plugin config — webhook handler will not be available"
       );
       return;
     }
 
-    // Build auth header for MC API calls
+    // Build auth header for MC API calls (legacy single-token path)
     const authHeader = `Bearer ${agentToken}`;
 
     // Read raw body from Node.js HTTP request
@@ -208,6 +212,19 @@ export default definePluginEntry({
     });
 
     api.logger?.info(`[mission-control] HTTP webhook route registered at ${webhookPath}`);
+
+    // Register with MC for each agent that has a token
+    if (gatewayUrl) {
+      if (agentToken) {
+        // Legacy: single token — register "default" agent
+        await registerPluginWithMc({ plugins: { entries: { "mission-control": { config: cfg } } } } as Parameters<typeof registerPluginWithMc>[0], "default");
+      }
+      for (const [agentName, agentCfg] of Object.entries(agents)) {
+        if (agentCfg?.token) {
+          await registerPluginWithMc({ plugins: { entries: { "mission-control": { config: cfg } } } } as Parameters<typeof registerPluginWithMc>[0], agentName);
+        }
+      }
+    }
 
     // Initialize the channel plugin for outbound message handling.
     // missionControlPlugin is a Promise (result of createChatChannelPlugin called at module load).

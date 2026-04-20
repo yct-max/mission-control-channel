@@ -25,6 +25,7 @@ export interface McChannelAccount {
   agentToken: string;
   webhookPath: string;
   routing: AgentRoutingTable;
+  gatewayUrl?: string;
 }
 
 // ─── Config Resolution ───────────────────────────────────────────────────────
@@ -74,7 +75,34 @@ export function resolveMcAccount(cfg: OpenClawConfig, accountId?: string | null)
     agentToken,
     webhookPath: (config.webhookPath as string | undefined) ?? "/mc/webhook",
     routing,
+    gatewayUrl: config.gatewayUrl as string | undefined,
   };
+}
+
+// ─── Plugin Registration ─────────────────────────────────────────────────
+
+export async function registerPluginWithMc(cfg: OpenClawConfig, agentName: string): Promise<void> {
+  const account = resolveMcAccount(cfg, agentName);
+  if (!account.gatewayUrl) return; // nothing to register with
+
+  const webhookUrl = `${account.gatewayUrl.replace(/\/$/, '')}${account.webhookPath}`;
+  try {
+    const res = await fetch(`${account.mcUrl}/api/agent-integrations/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${account.agentToken}`,
+      },
+      body: JSON.stringify({ webhook_url: webhookUrl }),
+    });
+    if (!res.ok) {
+      console.error(`[mission-control] registration failed: ${res.status} ${await res.text()}`);
+    } else {
+      console.info(`[mission-control] registered with MC: webhook=${webhookUrl}`);
+    }
+  } catch (err) {
+    console.error(`[mission-control] registration error:`, err);
+  }
 }
 
 // ─── Plugin ────────────────────────────────────────────────────────────────

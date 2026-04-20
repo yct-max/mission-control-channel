@@ -11,6 +11,10 @@
         "type": "string",
         "description": "Mission Control base URL, e.g. http://100.78.2.112:18793"
       },
+      "gatewayUrl": {
+        "type": "string",
+        "description": "Public gateway URL for this agent, e.g. http://100.113.226.91:18789. Used to register the webhook with MC."
+      },
       "agentToken": {
         "type": "string",
         "description": "Legacy: single token for all agents. Use agents{} for per-agent tokens instead."
